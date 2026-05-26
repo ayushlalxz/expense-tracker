@@ -103,7 +103,43 @@ def logout():
 
 @app.route("/profile")
 def profile():
-    return "Profile page — coming in Step 4"
+    if not session.get("user_id"):
+        return redirect(url_for("login"))
+
+    name = session.get("user_name", "User")
+    initials = "".join(w[0].upper() for w in name.split()[:2])
+
+    user = {
+        "name": name,
+        "email": "demo@spendly.com",
+        "member_since": "January 2026",
+        "initials": initials,
+    }
+    stats = {
+        "total_spent": "5,174",
+        "transactions": 8,
+        "top_category": "Shopping",
+    }
+    expenses = [
+        {"date": "20 May 2026", "description": "Miscellaneous",      "category": "Other",         "amount": "75.00"},
+        {"date": "17 May 2026", "description": "Restaurant dinner",  "category": "Food",          "amount": "180.00"},
+        {"date": "14 May 2026", "description": "New shoes",          "category": "Shopping",      "amount": "2,200.00"},
+        {"date": "10 May 2026", "description": "OTT subscription",   "category": "Entertainment", "amount": "599.00"},
+        {"date": "08 May 2026", "description": "Pharmacy",           "category": "Health",        "amount": "350.00"},
+        {"date": "05 May 2026", "description": "Electricity bill",   "category": "Bills",         "amount": "1,200.00"},
+        {"date": "03 May 2026", "description": "Metro recharge",     "category": "Transport",     "amount": "120.00"},
+        {"date": "01 May 2026", "description": "Grocery run",        "category": "Food",          "amount": "450.00"},
+    ]
+    categories = [
+        {"name": "Shopping",      "amount": "2,200", "pct": 43},
+        {"name": "Bills",         "amount": "1,200", "pct": 23},
+        {"name": "Entertainment", "amount": "599",   "pct": 12},
+        {"name": "Food",          "amount": "630",   "pct": 12},
+        {"name": "Health",        "amount": "350",   "pct": 7},
+        {"name": "Transport",     "amount": "120",   "pct": 2},
+        {"name": "Other",         "amount": "75",    "pct": 1},
+    ]
+    return render_template("profile.html", user=user, stats=stats, expenses=expenses, categories=categories)
 
 
 @app.route("/expenses/add")
