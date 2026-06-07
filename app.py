@@ -1,9 +1,9 @@
 from datetime import datetime
 
-from flask import Flask, render_template, request, redirect, url_for, flash, session
+from flask import Flask, render_template, request, redirect, url_for, flash, session, abort
 from werkzeug.security import generate_password_hash, check_password_hash
 from database.db import get_db, init_db, seed_db
-from database.queries import insert_expense, CATEGORIES
+from database.queries import insert_expense, get_expense_by_id, update_expense, get_recent_transactions, CATEGORIES
 
 app = Flask(__name__)
 app.secret_key = 'spendly-dev-secret'
@@ -123,16 +123,7 @@ def profile():
         "transactions": 8,
         "top_category": "Shopping",
     }
-    expenses = [
-        {"date": "20 May 2026", "description": "Miscellaneous",      "category": "Other",         "amount": "75.00"},
-        {"date": "17 May 2026", "description": "Restaurant dinner",  "category": "Food",          "amount": "180.00"},
-        {"date": "14 May 2026", "description": "New shoes",          "category": "Shopping",      "amount": "2,200.00"},
-        {"date": "10 May 2026", "description": "OTT subscription",   "category": "Entertainment", "amount": "599.00"},
-        {"date": "08 May 2026", "description": "Pharmacy",           "category": "Health",        "amount": "350.00"},
-        {"date": "05 May 2026", "description": "Electricity bill",   "category": "Bills",         "amount": "1,200.00"},
-        {"date": "03 May 2026", "description": "Metro recharge",     "category": "Transport",     "amount": "120.00"},
-        {"date": "01 May 2026", "description": "Grocery run",        "category": "Food",          "amount": "450.00"},
-    ]
+    expenses = get_recent_transactions(session["user_id"])
     categories = [
         {"name": "Shopping",      "amount": "2,200", "pct": 43},
         {"name": "Bills",         "amount": "1,200", "pct": 23},
@@ -190,9 +181,52 @@ def add_expense():
     return redirect(url_for("profile"))
 
 
-@app.route("/expenses/<int:id>/edit")
+@app.route("/expenses/<int:id>/edit", methods=["GET", "POST"])
 def edit_expense(id):
-    return "Edit expense — coming in Step 8"
+    if not session.get("user_id"):
+        return redirect(url_for("login"))
+
+    expense = get_expense_by_id(id, session["user_id"])
+    if expense is None:
+        abort(404)
+
+    if request.method == "GET":
+        form = {
+            "amount": expense["amount"],
+            "category": expense["category"],
+            "date": expense["date"],
+            "description": expense["description"] or "",
+        }
+        return render_template("edit_expense.html", expense=expense, categories=CATEGORIES, form=form)
+
+    amount_raw = request.form.get("amount", "").strip()
+    category = request.form.get("category", "").strip()
+    date_raw = request.form.get("date", "").strip()
+    description = request.form.get("description", "").strip() or None
+
+    form = {"amount": amount_raw, "category": category, "date": date_raw, "description": description or ""}
+
+    try:
+        amount = float(amount_raw)
+        if amount <= 0:
+            raise ValueError
+    except ValueError:
+        flash("Amount must be a positive number greater than 0.", "error")
+        return render_template("edit_expense.html", expense=expense, categories=CATEGORIES, form=form)
+
+    if category not in CATEGORIES:
+        flash("Please select a valid category.", "error")
+        return render_template("edit_expense.html", expense=expense, categories=CATEGORIES, form=form)
+
+    try:
+        datetime.strptime(date_raw, "%Y-%m-%d")
+    except ValueError:
+        flash("Please enter a valid date.", "error")
+        return render_template("edit_expense.html", expense=expense, categories=CATEGORIES, form=form)
+
+    update_expense(id, session["user_id"], amount, category, date_raw, description)
+    flash("Expense updated!", "success")
+    return redirect(url_for("profile"))
 
 
 @app.route("/expenses/<int:id>/delete")
